@@ -1,0 +1,296 @@
+### Sports Field Booking System — HTTP Requests
+### Compatible with IntelliJ IDEA HTTP Client and VS Code REST Client extension.
+### ─────────────────────────────────────────────────────────────────────────────
+### USAGE:
+###   1. Run the app (mvn spring-boot:run)
+###   2. Execute the Login request first — copy the token into @token below.
+###   3. Run any other request in order.
+
+@baseUrl = http://localhost:8080
+@token = PASTE_JWT_TOKEN_HERE
+
+
+### ═══════════════════════════════════════════════════════════
+### AUTH
+### ═══════════════════════════════════════════════════════════
+
+### 1. Login — get JWT token
+# Expected: 200 OK with { "token": "...", "tokenType": "Bearer", "expiresIn": 86400000 }
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+###
+
+### 2. Login — bad credentials (should 401)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "wrongpassword"
+}
+
+###
+
+### 3. Access protected endpoint without token (should 401)
+GET {{baseUrl}}/api/fields
+
+
+### ═══════════════════════════════════════════════════════════
+### FIELDS
+### ═══════════════════════════════════════════════════════════
+
+### 4. Create outdoor soccer field
+# Expected: 201 Created
+POST {{baseUrl}}/api/fields
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Stade Anfa",
+  "sportType": "SOCCER",
+  "indoor": false,
+  "pricePerHour": 150.00,
+  "latitude": 33.5731,
+  "longitude": -7.5898
+}
+
+###
+
+### 5. Create indoor basketball court
+# Expected: 201 Created
+POST {{baseUrl}}/api/fields
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Salle Omnisports",
+  "sportType": "BASKETBALL",
+  "indoor": true,
+  "pricePerHour": 200.00,
+  "latitude": 33.5731,
+  "longitude": -7.5898
+}
+
+###
+
+### 6. Create outdoor tennis court
+# Expected: 201 Created
+POST {{baseUrl}}/api/fields
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Court Central",
+  "sportType": "TENNIS",
+  "indoor": false,
+  "pricePerHour": 80.00,
+  "latitude": 33.5731,
+  "longitude": -7.5898
+}
+
+###
+
+### 7. List all fields
+# Expected: 200 OK with array of fields
+GET {{baseUrl}}/api/fields
+Authorization: Bearer {{token}}
+
+###
+
+### 8. Get field by ID
+# Expected: 200 OK with single field
+GET {{baseUrl}}/api/fields/1
+Authorization: Bearer {{token}}
+
+###
+
+### 9. Get non-existent field (should 404)
+GET {{baseUrl}}/api/fields/9999
+Authorization: Bearer {{token}}
+
+###
+
+### 10. Update a field
+# Expected: 200 OK with updated field
+PUT {{baseUrl}}/api/fields/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Stade Anfa - Terrain A",
+  "sportType": "SOCCER",
+  "indoor": false,
+  "pricePerHour": 175.00,
+  "latitude": 33.5731,
+  "longitude": -7.5898
+}
+
+###
+
+### 11. Create field with validation error (missing required fields — should 400)
+POST {{baseUrl}}/api/fields
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "",
+  "indoor": true
+}
+
+###
+
+### 12. Delete a field (use an ID you don't need)
+# Expected: 204 No Content
+DELETE {{baseUrl}}/api/fields/3
+Authorization: Bearer {{token}}
+
+
+### ═══════════════════════════════════════════════════════════
+### RESERVATIONS
+### ═══════════════════════════════════════════════════════════
+
+### 13. Create first reservation on outdoor field — slot 09:00-11:00
+# For outdoor fields, expects weather > 10°C on the date.
+# Expected: 201 Created (if weather permits) or 409 if temp ≤ 10°C
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 1,
+  "clientName": "Youssef Alami",
+  "clientPhone": "+212 6 12 34 56 78",
+  "clientEmail": "youssef@example.com",
+  "date": "2026-09-20",
+  "startHour": 9,
+  "endHour": 11
+}
+
+###
+
+### 14. DOUBLE-BOOKING TEST — same field, same slot (should 409 Conflict)
+# This is the most important debugging test. If you get 201 instead, the overlap check is broken.
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 1,
+  "clientName": "Another Client",
+  "clientPhone": "+212 6 99 88 77 66",
+  "clientEmail": "another@example.com",
+  "date": "2026-09-20",
+  "startHour": 9,
+  "endHour": 11
+}
+
+###
+
+### 15. PARTIAL OVERLAP TEST — starts inside existing 09-11 slot (should 409)
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 1,
+  "clientName": "Overlap Client",
+  "clientPhone": "+212 6 11 22 33 44",
+  "clientEmail": "overlap@example.com",
+  "date": "2026-09-20",
+  "startHour": 10,
+  "endHour": 12
+}
+
+###
+
+### 16. ADJACENT SLOT — starts exactly when previous ends (should 201, NOT a conflict)
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 1,
+  "clientName": "Adjacent Client",
+  "clientPhone": "+212 6 55 66 77 88",
+  "clientEmail": "adjacent@example.com",
+  "date": "2026-09-20",
+  "startHour": 11,
+  "endHour": 13
+}
+
+###
+
+### 17. Create reservation on indoor field (no weather check)
+# Expected: 201 Created regardless of temperature
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 2,
+  "clientName": "Fatima Zahra",
+  "clientPhone": "+212 6 00 11 22 33",
+  "clientEmail": "fatima@example.com",
+  "date": "2026-09-20",
+  "startHour": 14,
+  "endHour": 16
+}
+
+###
+
+### 18. Get reservations for a field on a date
+# Expected: 200 OK with list of reservations
+GET {{baseUrl}}/api/reservations?fieldId=1&date=2026-09-20
+Authorization: Bearer {{token}}
+
+###
+
+### 19. Get single reservation by ID
+GET {{baseUrl}}/api/reservations/1
+Authorization: Bearer {{token}}
+
+###
+
+### 20. Get non-existent reservation (should 404)
+GET {{baseUrl}}/api/reservations/9999
+Authorization: Bearer {{token}}
+
+###
+
+### 21. Reservation with invalid hours — startHour > endHour (should 400)
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 1,
+  "clientName": "Bad Hours Client",
+  "clientPhone": "+212 6 00 00 00 00",
+  "clientEmail": "bad@example.com",
+  "date": "2026-09-20",
+  "startHour": 14,
+  "endHour": 10
+}
+
+###
+
+### 22. Reservation for non-existent field (should 404)
+POST {{baseUrl}}/api/reservations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fieldId": 9999,
+  "clientName": "Ghost Client",
+  "clientPhone": "+212 6 00 00 00 00",
+  "clientEmail": "ghost@example.com",
+  "date": "2026-09-20",
+  "startHour": 9,
+  "endHour": 11
+}
